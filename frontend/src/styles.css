@@ -1,0 +1,19 @@
+@import 'tailwindcss';
+
+html {
+    scroll-behavior: smooth;
+}
+
+.scrollbar-hide {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
+}
+
+button:not(:disabled) {
+    cursor: pointer;
+}
+

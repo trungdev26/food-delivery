@@ -1,0 +1,113 @@
+@if (restaurant; as restaurant) {
+    <div [class.pb-24]="totalQuantity() > 0">
+        <!-- Cover -->
+        <div class="relative h-56 w-full overflow-hidden md:h-72">
+            <img [src]="restaurant.image" [alt]="restaurant.name" class="h-full w-full object-cover" />
+            <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent"></div>
+
+            <a
+                routerLink="/"
+                class="absolute left-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-neutral-700 shadow transition-transform hover:bg-white active:scale-90"
+                aria-label="Quay lại"
+            >
+                ←
+            </a>
+
+            <div class="absolute bottom-4 left-4 right-4 text-white">
+                <h1 class="text-2xl font-extrabold drop-shadow">{{ restaurant.name }}</h1>
+                <p class="text-sm text-neutral-100 drop-shadow">{{ restaurant.address }}</p>
+            </div>
+        </div>
+
+        <!-- Info bar -->
+        <div class="mx-auto max-w-4xl px-4 py-4">
+            <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-neutral-500">
+                <app-star-rating [rating]="restaurant.rating" [reviewCount]="restaurant.reviewCount" />
+                <span>⏱ {{ restaurant.deliveryTimeMin }} phút</span>
+                <span>🚚 {{ restaurant.deliveryFee | number }}đ</span>
+                <span>📍 {{ restaurant.distanceKm }} km</span>
+            </div>
+
+            <div class="mt-3 flex flex-wrap gap-2">
+                @for (tag of restaurant.tags; track tag) {
+                    <span class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+                        {{ tag }}
+                    </span>
+                }
+            </div>
+
+            @if (restaurant.promo) {
+                <div
+                    class="mt-4 flex items-center gap-2 rounded-2xl bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700"
+                >
+                    <span>🎁</span>
+                    {{ restaurant.promo }}
+                </div>
+            }
+
+            <!-- Menu -->
+            <div class="mt-8 space-y-8">
+                @for (group of menuByCategory(); track group.category) {
+                    <section>
+                        <h2 class="mb-3 text-lg font-bold text-neutral-900">{{ group.category }}</h2>
+                        <div class="space-y-3">
+                            @for (food of group.foods; track food.id) {
+                                <div
+                                    class="flex items-center gap-4 rounded-2xl bg-white p-3 shadow-sm ring-1 ring-neutral-100"
+                                >
+                                    <img
+                                        [src]="food.image"
+                                        [alt]="food.name"
+                                        loading="lazy"
+                                        decoding="async"
+                                        class="h-20 w-20 shrink-0 rounded-xl bg-neutral-100 object-cover"
+                                    />
+                                    <div class="min-w-0 flex-1">
+                                        <p class="truncate font-semibold text-neutral-900">{{ food.name }}</p>
+                                        <p class="mt-0.5 line-clamp-2 text-xs text-neutral-400">
+                                            {{ food.description }}
+                                        </p>
+                                        <p class="mt-1 text-sm font-bold text-emerald-600">
+                                            {{ food.price | number }}đ
+                                        </p>
+                                    </div>
+                                    <app-quantity-stepper
+                                        [quantity]="quantityOf(food)"
+                                        (increase)="increase(food)"
+                                        (decrease)="decrease(food)"
+                                    />
+                                </div>
+                            }
+                        </div>
+                    </section>
+                }
+            </div>
+        </div>
+
+        <!-- Sticky cart bar -->
+        <div
+            class="fixed inset-x-0 bottom-0 z-20 border-t border-neutral-100 bg-white px-4 py-3 shadow-lg transition-transform duration-300 ease-out"
+            [class.translate-y-full]="totalQuantity() === 0"
+        >
+            <div class="mx-auto flex max-w-4xl items-center justify-between gap-4">
+                <div class="text-sm">
+                    <p class="font-semibold text-neutral-900">{{ totalQuantity() }} món</p>
+                    <p class="text-emerald-600">{{ totalPrice() | number }}đ</p>
+                </div>
+                <button
+                    type="button"
+                    class="flex-1 rounded-full bg-emerald-600 py-3 text-sm font-semibold text-white transition-transform hover:bg-emerald-700 active:scale-95 sm:flex-none sm:px-10"
+                >
+                    Xem giỏ hàng
+                </button>
+            </div>
+        </div>
+    </div>
+} @else {
+    <div class="mx-auto max-w-md px-4 py-24 text-center">
+        <p class="text-lg font-semibold text-neutral-900">Không tìm thấy nhà hàng</p>
+        <a routerLink="/" class="mt-3 inline-block text-sm font-medium text-emerald-600 hover:underline">
+            Về trang chủ
+        </a>
+    </div>
+}
