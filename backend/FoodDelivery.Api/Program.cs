@@ -1,51 +1,30 @@
-using System.Data;
 using FoodDelivery.Api.Common;
-using FoodDelivery.Api.Data;
-using FoodDelivery.Api.DTOs;
-using FoodDelivery.Api.Entities;
-using FoodDelivery.Api.Repositories;
-using FoodDelivery.Api.Services;
-using Microsoft.AspNetCore.Mvc;
+using FoodDelivery.Api.Auth;
+using FoodDelivery.Api.Middleware;
+using FoodDelivery.Api.Options;
+using FoodDelivery.Application.Abstractions;
+using FoodDelivery.Infrastructure;
+using FoodDelivery.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
-using MySqlConnector;
 
 var builder = WebApplication.CreateBuilder(args);
-
-var connectionString = builder.Configuration.GetConnectionString("Default")
-    ?? throw new InvalidOperationException("Missing ConnectionStrings:Default in configuration.");
 
 // Add services to the container.
 
 builder.Services.AddControllers()
     .ConfigureApiBehaviorOptions(options =>
     {
-        options.InvalidModelStateResponseFactory = context =>
-        {
-            var errors = context.ModelState
-                .Where(kvp => kvp.Value?.Errors.Count > 0)
-                .ToDictionary(
-                    kvp => kvp.Key,
-                    kvp => kvp.Value!.Errors.Select(e => e.ErrorMessage).ToArray());
-
-            return new BadRequestObjectResult(new ApiErrorPayload
-            {
-                Message = "Dữ liệu không hợp lệ",
-                Code = "ERR_VALIDATION",
-                Errors = errors,
-            });
-        };
+        options.InvalidModelStateResponseFactory = ApiInvalidModelStateResponseFactory.Create;
     });
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
-
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseMySql(connectionString, new MySqlServerVersion(new Version(8, 0, 21))));
-
-builder.Services.AddScoped<IDbConnection>(_ => new MySqlConnection(connectionString));
-
-builder.Services.AddScoped<IRepository<Category, string>, CategoryRepository>();
-builder.Services.AddScoped<IBaseService<CategoryDto, CreateCategoryDto, UpdateCategoryDto, string>, CategoryService>();
+builder.Services.AddAuthentication();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentUser, CurrentUser>();
+builder.Services.Configure<TenantResolutionOptions>(
+    builder.Configuration.GetSection(TenantResolutionOptions.SectionName));
+builder.Services.AddInfrastructure(builder.Configuration);
 
 builder.Services.AddCors(options =>
 {
@@ -66,7 +45,7 @@ if (app.Environment.IsDevelopment())
     using var scope = app.Services.CreateScope();
     try
     {
-        scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.Migrate();
+        scope.ServiceProvider.GetRequiredService<ApplicationDbContext>().Database.Migrate();
     }
     catch (Exception ex)
     {
@@ -78,6 +57,8 @@ app.UseMiddleware<ExceptionHandlingMiddleware>();
 
 app.UseCors();
 
+app.UseAuthentication();
+app.UseMiddleware<TenantResolutionMiddleware>();
 app.UseAuthorization();
 
 app.MapControllers();
