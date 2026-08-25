@@ -17,4 +17,10 @@
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.5.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="../FoodDelivery.Application/FoodDelivery.Application.csproj" />
+    <ProjectReference Include="../FoodDelivery.Domain/FoodDelivery.Domain.csproj" />
+    <ProjectReference Include="../FoodDelivery.Infrastructure/FoodDelivery.Infrastructure.csproj" />
+  </ItemGroup>
+
 </Project>
