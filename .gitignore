@@ -18,6 +18,7 @@ yarn-error.log
 backend/**/bin/
 backend/**/obj/
 backend/**/*.user
+backend/.vs/
 
 # IDEs and editors
 .idea/
