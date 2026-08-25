@@ -11,6 +11,7 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="2.5.4">
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="6.0.36" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../FoodDelivery.Application/FoodDelivery.Application.csproj" />

@@ -1,6 +1,7 @@
 using FoodDelivery.Api.Middleware;
 using FoodDelivery.Api.Options;
 using FoodDelivery.Application.Abstractions;
+using FoodDelivery.Domain.Common;
 using FoodDelivery.Domain.Tenancy;
 using FoodDelivery.Infrastructure.Persistence;
 using FoodDelivery.Infrastructure.Tenancy;
@@ -19,7 +20,7 @@ public class TenantResolutionMiddlewareTests
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options;
-        await using var db = new ApplicationDbContext(options);
+        await using var db = new ApplicationDbContext(options, new NoOpDispatcher());
         var tenant = Tenant.Create(Guid.NewGuid(), "Bánh Mỳ Cay", "banhmycay");
         db.Tenants.Add(tenant);
         await db.SaveChangesAsync();
@@ -48,5 +49,11 @@ public class TenantResolutionMiddlewareTests
         public Guid? UserId => null;
         public Guid? TenantId => null;
         public bool IsInRole(string role) => false;
+    }
+
+    private sealed class NoOpDispatcher : IDomainEventDispatcher
+    {
+        public Task DispatchAsync(IEnumerable<IDomainEvent> events, CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
     }
 }

@@ -31,6 +31,13 @@ public sealed class Tenant : AggregateRoot<Guid>
         return new Tenant(id, name.Trim(), normalized);
     }
 
-    public void Activate() => Status = TenantStatus.Active;
-    public void Deactivate() => Status = TenantStatus.Inactive;
+    public void Activate() => ChangeStatus(TenantStatus.Active);
+    public void Deactivate() => ChangeStatus(TenantStatus.Inactive);
+
+    private void ChangeStatus(TenantStatus status)
+    {
+        if (Status == status) return;
+        Status = status;
+        RaiseDomainEvent(new TenantStatusChangedDomainEvent(Id, status));
+    }
 }

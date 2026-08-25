@@ -8,7 +8,7 @@
 
 **Tech Stack:** .NET 6, ASP.NET Core, EF Core 6.0.36, Pomelo MySQL 6.0.2, xUnit.
 
-**Spec:** `docs/superpowers/specs/2026-08-25-ddd-event-architecture-phase-1-design.md`
+**Spec:** `backend/docs/architecture/ddd-event-architecture-phase-1.md`
 
 ## Global Constraints
 
