@@ -21,6 +21,10 @@ public static class DependencyInjection
         services.AddScoped<TenantContext>();
         services.AddScoped<ITenantContext>(provider => provider.GetRequiredService<TenantContext>());
         services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
+        services.AddScoped<IUnitOfWorkFactory>(provider =>
+            new EfDapperUnitOfWorkFactory(
+                connectionString,
+                provider.GetRequiredService<IDomainEventDispatcher>()));
 
         return services;
     }

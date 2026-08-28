@@ -12,6 +12,8 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="6.0.36" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="6.0.36" />
+    <PackageReference Include="Dapper" Version="2.1.35" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../FoodDelivery.Application/FoodDelivery.Application.csproj" />

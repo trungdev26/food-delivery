@@ -66,10 +66,10 @@ EF Core thường tự tạo connection, mở ngay trước database operation v
 Khi cấu hình bằng connection instance:
 
 ```csharp
-options.UseMySql(connection, serverVersion, contextOwnsConnection: false);
+options.UseMySql(connection, serverVersion);
 ```
 
-EF Core dùng đúng instance được truyền vào. `contextOwnsConnection: false` nói rằng DbContext không được dispose connection vì Unit of Work mới là owner.
+Với Pomelo 6.0.2, overload nhận `DbConnection` không có tham số `contextOwnsConnection`. Khi connection được truyền vào ở trạng thái mở, EF Core dùng đúng instance đó và không tự open/close; Unit of Work vẫn dispose DbContext trước rồi mới dispose transaction và connection.
 
 Sau khi transaction được tạo ngoài DbContext, lời gọi:
 
@@ -221,6 +221,8 @@ rollback DbTransaction
 ```
 
 Side effect ngoài database như email, webhook và broker không chạy trực tiếp trong flow này. Khi cần reliability cho side effect ngoài, event handler ghi `OutboxMessage` trong cùng transaction.
+
+Nếu event handler làm Aggregate phát sinh Domain Event mới, Unit of Work lặp `SaveChanges → dispatch pending events` cho tới khi không còn event chưa dispatch, rồi mới commit.
 
 ## 8. Refactor Core hiện tại
 
