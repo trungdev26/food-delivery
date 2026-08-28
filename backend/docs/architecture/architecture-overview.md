@@ -6,7 +6,7 @@
 
 Backend là nền tảng multi-tenant cho hệ thống đặt đồ ăn. Business sẽ thay đổi, nhưng dependency direction, transaction ownership và tenant isolation phải ổn định.
 
-### Senior reasoning
+### Technical reasoning
 
 Base tốt không phải base có nhiều pattern nhất. Base tốt giữ những invariant kỹ thuật khó sửa về sau, đồng thời để business module được thêm dần mà không sửa ngược toàn hệ thống.
 

@@ -6,7 +6,7 @@
 
 `IUnitOfWork`, `IUnitOfWorkFactory`, `ICurrentUser`, `ITenantContext` và `IDomainEventDispatcher` nằm trong `Application`, còn implementation nằm trong `Infrastructure` hoặc `API`.
 
-### Senior reasoning
+### Technical reasoning
 
 Abstraction không mặc định thuộc project của implementation. Contract thuộc nơi **cần capability** và định nghĩa policy sử dụng nó. Application cần “commit một use case”, “biết current tenant” và “dispatch event”; Application không cần biết MySQL, `HttpContext` hay DI reflection.
 

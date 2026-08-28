@@ -40,7 +40,7 @@ Factory chỉ tạo resource bundle. `EfDapperUnitOfWork` là owner duy nhất c
 
 MySQL InnoDB mặc định dùng `REPEATABLE READ`. Plain consistent `SELECT` trong cùng transaction đọc snapshot được thiết lập bởi consistent read đầu tiên; `READ COMMITTED` tạo snapshot mới cho mỗi consistent read. Nguồn: [MySQL 8.0 Transaction Isolation Levels](https://dev.mysql.com/doc/refman/8.0/en/innodb-transaction-isolation-levels.html).
 
-### Senior decision
+### Technical decision
 
 Base hiện không override isolation level, vì vậy dùng server/session default. Không hard-code `READ COMMITTED` hoặc `SERIALIZABLE` trước khi có workload và invariant thật.
 

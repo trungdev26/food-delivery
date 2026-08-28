@@ -16,7 +16,7 @@ sequenceDiagram
     Host-->>Host: Listen HTTP
 ```
 
-### Senior reasoning
+### Technical reasoning
 
 `Program.cs` là composition root: nơi duy nhất được phép nối concrete implementation vào abstractions. Domain/Application không tự resolve service và không đọc configuration.
 

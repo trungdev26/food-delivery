@@ -25,7 +25,7 @@ Thứ tự pipeline là `Authentication → TenantResolution → Authorization`.
 
 ## 3. Isolation layers
 
-Senior không dựa vào một lớp filter duy nhất:
+Thiết kế không dựa vào một lớp filter duy nhất:
 
 1. Tenant-owned row lưu `TenantId` trực tiếp khi cần filter/index.
 2. Query mặc định scope theo current Tenant.
