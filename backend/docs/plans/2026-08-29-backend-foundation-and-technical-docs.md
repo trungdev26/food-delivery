@@ -58,4 +58,4 @@
 
 - [x] Validate UTF-8 and Mermaid fences; scan placeholders and stale links.
 - [x] Run full build, current tests and `git diff --check`.
-- [ ] Commit and push `dev`.
+- [x] Commit and push `dev`.
