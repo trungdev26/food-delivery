@@ -8,7 +8,7 @@
 
 **Tech Stack:** .NET 6, EF Core 6.0.36, Pomelo MySQL 6.0.2, xUnit.
 
-**Spec:** `backend/docs/architecture/ddd-event-architecture-phase-1.md`
+**Spec:** `backend/docs/architecture/architecture-overview.md`
 
 ## Global Constraints
 

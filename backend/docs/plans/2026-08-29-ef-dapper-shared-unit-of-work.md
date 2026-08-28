@@ -8,7 +8,7 @@
 
 **Tech Stack:** .NET 6, EF Core 6.0.36, Pomelo 6.0.2, MySqlConnector, Dapper 2.1.35, xUnit, SQLite integration tests.
 
-**Spec:** `backend/docs/architecture/ef-dapper-shared-unit-of-work-design.md`
+**Spec:** `backend/docs/architecture/persistence-transactions-and-concurrency.md`
 
 ## Global Constraints
 
@@ -46,7 +46,7 @@
 
 ### Task 4: Senior thinking documentation
 
-**Files:** Create `backend/docs/architecture/ef-dapper-unit-of-work-senior-thinking.md`; update design spec if implementation differs.
+**Files:** Consolidated into `backend/docs/architecture/persistence-transactions-and-concurrency.md`.
 
 - [x] Document reasoning sequence: requirements, ownership, transaction boundary, lifecycle, failure matrix, concurrency, testing and rejected alternatives.
 - [ ] Run full tests, `git diff --check`, commit and push `dev`.

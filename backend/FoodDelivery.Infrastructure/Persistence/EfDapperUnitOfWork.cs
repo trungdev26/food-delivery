@@ -51,7 +51,7 @@ public sealed class EfDapperUnitOfWork : IUnitOfWork
         }
         catch
         {
-            await TryRollbackAsync(cancellationToken);
+            await TryRollbackAsync(CancellationToken.None);
             throw;
         }
     }

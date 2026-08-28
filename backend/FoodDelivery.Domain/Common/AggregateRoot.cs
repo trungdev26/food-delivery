@@ -6,6 +6,7 @@ public abstract class AggregateRoot<TId> : Entity<TId>
 
     protected AggregateRoot(TId id) : base(id) { }
 
+    public Guid ConcurrencyToken { get; private set; } = Guid.NewGuid();
     public IReadOnlyCollection<IDomainEvent> DomainEvents => _domainEvents;
 
     protected void RaiseDomainEvent(IDomainEvent domainEvent) => _domainEvents.Add(domainEvent);

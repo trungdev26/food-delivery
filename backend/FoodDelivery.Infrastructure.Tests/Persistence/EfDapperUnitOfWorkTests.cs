@@ -62,8 +62,16 @@ public class EfDapperUnitOfWorkTests
 
     private static Task InsertTenantWithDapper(Setup setup, string subdomain) =>
         setup.Connection.ExecuteAsync(
-            "INSERT INTO Tenants (Id, Name, Subdomain, Status) VALUES (@Id, @Name, @Subdomain, @Status)",
-            new { Id = Guid.NewGuid(), Name = "Dapper Tenant", Subdomain = subdomain, Status = 1 },
+            "INSERT INTO Tenants (Id, Name, Subdomain, Status, ConcurrencyToken) " +
+            "VALUES (@Id, @Name, @Subdomain, @Status, @ConcurrencyToken)",
+            new
+            {
+                Id = Guid.NewGuid(),
+                Name = "Dapper Tenant",
+                Subdomain = subdomain,
+                Status = 1,
+                ConcurrencyToken = Guid.NewGuid()
+            },
             setup.Transaction);
 
     private sealed class RecordingDispatcher : IDomainEventDispatcher

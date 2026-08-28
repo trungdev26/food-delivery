@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using FoodDelivery.Domain.Common;
+using Microsoft.EntityFrameworkCore;
 
 namespace FoodDelivery.Api.Common;
 
@@ -31,11 +32,21 @@ public class ExceptionHandlingMiddleware
             context.Response.StatusCode = StatusCodes.Status409Conflict;
             await WriteErrorAsync(context, CommonResultDto<object?>.Fail(ex.Message, ex.Code));
         }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            _logger.LogWarning(ex, "Optimistic concurrency conflict");
+            context.Response.StatusCode = StatusCodes.Status409Conflict;
+            await WriteErrorAsync(context, CommonResultDto<object?>.Fail(
+                "Dữ liệu đã được thay đổi bởi yêu cầu khác. Vui lòng tải lại và thử lại.",
+                "ERR_CONCURRENCY_CONFLICT"));
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unhandled exception");
             context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
-            await WriteErrorAsync(context, CommonResultDto<object?>.Fail("Đã có lỗi không xác định xảy ra", "ERR_INTERNAL"));
+            await WriteErrorAsync(context, CommonResultDto<object?>.Fail(
+                "Đã có lỗi không xác định xảy ra.",
+                "ERR_INTERNAL"));
         }
     }
 
