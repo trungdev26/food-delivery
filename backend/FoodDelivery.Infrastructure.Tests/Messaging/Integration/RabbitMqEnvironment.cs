@@ -31,4 +31,27 @@ internal static class RabbitMqEnvironment
             AutomaticRecoveryEnabled = true,
             TopologyRecoveryEnabled = true
         }.CreateConnectionAsync(connectionName);
+
+    internal static Task<IConnection> ConnectClusterAsync(
+        string connectionName,
+        params int[] ports) =>
+        new ConnectionFactory
+        {
+            VirtualHost = VirtualHost,
+            UserName = UserName,
+            Password = Password,
+            AutomaticRecoveryEnabled = true,
+            TopologyRecoveryEnabled = true,
+            NetworkRecoveryInterval = TimeSpan.FromSeconds(2)
+        }.CreateConnectionAsync(
+            ports.Select(port => new AmqpTcpEndpoint(HostName, port)),
+            connectionName);
+
+    internal static HttpClient CreateClusterManagementClient(int port = 15674)
+    {
+        var client = new HttpClient { BaseAddress = new Uri($"http://localhost:{port}/") };
+        var credentials = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{UserName}:{Password}"));
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", credentials);
+        return client;
+    }
 }

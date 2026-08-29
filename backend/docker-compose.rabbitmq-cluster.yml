@@ -1,0 +1,49 @@
+services:
+  rabbit1:
+    image: rabbitmq:4.1.8-management-alpine
+    container_name: food-rabbit1
+    hostname: rabbit1
+    environment: &rabbit-environment
+      RABBITMQ_ERLANG_COOKIE: food_delivery_cluster_cookie
+      RABBITMQ_DEFAULT_USER: food_app
+      RABBITMQ_DEFAULT_PASS: food_dev
+      RABBITMQ_DEFAULT_VHOST: food
+    ports:
+      - "5674:5672"
+      - "15674:15672"
+    volumes:
+      - rabbit1-data:/var/lib/rabbitmq
+    healthcheck: &rabbit-healthcheck
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  rabbit2:
+    image: rabbitmq:4.1.8-management-alpine
+    container_name: food-rabbit2
+    hostname: rabbit2
+    environment: *rabbit-environment
+    ports:
+      - "5675:5672"
+      - "15675:15672"
+    volumes:
+      - rabbit2-data:/var/lib/rabbitmq
+    healthcheck: *rabbit-healthcheck
+
+  rabbit3:
+    image: rabbitmq:4.1.8-management-alpine
+    container_name: food-rabbit3
+    hostname: rabbit3
+    environment: *rabbit-environment
+    ports:
+      - "5676:5672"
+      - "15676:15672"
+    volumes:
+      - rabbit3-data:/var/lib/rabbitmq
+    healthcheck: *rabbit-healthcheck
+
+volumes:
+  rabbit1-data:
+  rabbit2-data:
+  rabbit3-data:
