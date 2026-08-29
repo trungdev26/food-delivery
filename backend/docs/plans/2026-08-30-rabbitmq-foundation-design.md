@@ -254,7 +254,149 @@ Keyword reference
 
 Tài liệu có sơ đồ Mermaid cho publish flow, consumer ACK flow, failure windows, retry/DLQ, Outbox/Inbox, multiple instances, FEFO allocation và cluster capacity.
 
-## 10. Quyết định và giới hạn
+## 10. Correctness và load-test harness
+
+Business models trong test chỉ là executable specification. Chúng không được reference từ production projects và không tạo migration cho `food-delivery`.
+
+Test harness sử dụng RabbitMQ và MySQL thật để kiểm tra end-to-end behavior. Mock chỉ phù hợp với serialization hoặc configuration branch; mock broker không chứng minh ACK, redelivery, confirm, connection recovery hoặc cạnh tranh giữa nhiều consumers.
+
+### 10.1 Test-first sequence
+
+```text
+Viết invariant và failure scenario
+  -> chạy để thấy baseline trực giác thất bại
+  -> bổ sung mechanism tối thiểu
+  -> chạy lại correctness test
+  -> chạy multi-instance test
+  -> chạy load profile
+  -> ghi measurement và giới hạn vào tài liệu
+```
+
+Baseline cần chứng minh được các lỗi sau trước khi áp dụng pattern:
+
+- `SaveChanges` rồi publish làm mất event khi process dừng ở giữa.
+- ACK trước commit làm mất delivery nhưng business state chưa đổi.
+- Commit rồi dừng trước ACK tạo duplicate delivery.
+- Read-modify-write tồn kho làm lost update dưới concurrent consumers.
+- Idempotency key thiếu tenant/shop scope tạo collision.
+- FEFO dùng `SKIP LOCKED` có thể lấy lô hết hạn muộn hơn.
+
+### 10.2 Test-only business schema
+
+Harness tạo schema biệt lập gồm `TestOrder`, `TestInventoryLot`, `TestReservation`, `TestAllocation`, `TestOutbox` và `TestInbox`. Schema được tạo và xóa trong test database, không đi qua production migrations.
+
+Các invariant được kiểm tra sau mỗi scenario:
+
+```text
+missingLogicalEvents = 0
+duplicateLogicalEffects = 0
+mọi lot.available >= 0
+initialQuantity = available + allocated + confirmedConsumption
+reservation.quantity = tổng allocation.quantity
+mỗi (consumer, messageId) có tối đa một Inbox record
+strict FEFO không dùng lô sau khi lô trước còn available tại lock boundary
+```
+
+### 10.3 Scenario đối chứng
+
+Mỗi case có một baseline test và một correctness test. Baseline test không được để ở trạng thái thất bại; nó điều phối timing bằng barrier/checkpoint rồi assert rằng anomaly đã xuất hiện. Correctness test chạy cùng timing nhưng assert invariant được giữ.
+
+| Case phổ biến | Thiết kế trực giác | Kết quả được test chứng minh | Thiết kế bảo vệ invariant |
+| --- | --- | --- | --- |
+| Publish event | Commit rồi gọi `BasicPublish` | Process dừng giữa hai bước làm mất intent | Outbox ghi cùng business transaction. |
+| Producer recovery | Coi method publish return là broker đã lưu | Mất kết nối tạo unknown publish outcome | Persistent message, Publisher Confirm và publish lại từ Outbox. |
+| Consumer success | `autoAck = true` hoặc ACK trước xử lý | Consumer dừng làm message mất | Manual ACK sau business commit. |
+| Consumer retry | Xử lý lại toàn bộ message | Commit rồi dừng trước ACK làm side effect lặp | Inbox unique key và idempotent outcome. |
+| Trừ tồn | `SELECT`, trừ trong memory, `UPDATE` | Hai consumers cùng đọc một giá trị gây lost update hoặc tồn âm | Row lock hoặc atomic conditional update. |
+| Nhiều lô | Mỗi worker tự chọn lô đầu tiên | Hai workers cùng allocate một quantity | Deterministic lock order và transaction. |
+| FEFO throughput | Dùng `SKIP LOCKED` nhưng vẫn gọi là strict FEFO | Lô sau được dùng khi lô trước đang khóa | Chọn strict FEFO có blocking hoặc công bố rõ approximate FEFO. |
+| Idempotency scope | Unique theo `messageId` hoặc `businessKey` thiếu scope | Tenant/shop này chặn hoặc ghi đè tenant/shop khác | Unique key gồm consumer, tenant, shop và operation identity phù hợp. |
+| Ordering | Tin rằng queue luôn giao đúng thứ tự | Retry và nhiều consumers làm event cũ đến sau | Aggregate version và conditional state transition. |
+| Retry | Requeue ngay mọi exception | Permanent error tạo hot loop; outage tạo retry storm | Error taxonomy, backoff, retry budget và DLQ. |
+| Multiple instances | Dùng `lock` trong process | Hai replicas vẫn chạy cùng critical section | Database constraint/transaction hoặc distributed coordination đúng resource. |
+| Scale | Tăng replicas và prefetch cùng lúc | DB pool cạn, unacked tăng, tail latency xấu hơn | Suy ra global concurrency từ workload và bottleneck. |
+| DLQ | Coi message vào DLQ là đã xử lý | Business intent nằm im không ai phục hồi | Alert, operator runbook, replay và reconciliation. |
+
+Tên test phản ánh mechanism thay vì đánh giá người viết code, ví dụ:
+
+```text
+DirectPublishBaselineTests
+OutboxRecoveryTests
+AckBeforeCommitBaselineTests
+InboxIdempotencyTests
+ReadModifyWriteBaselineTests
+AtomicLotAllocationTests
+StrictFefoContentionTests
+MultiInstanceLoadTests
+```
+
+Tài liệu chỉ nhúng các test excerpt ngắn khi code giúp nhìn thấy failure window rõ hơn prose. Bốn excerpt ưu tiên là:
+
+1. Barrier buộc hai transactions cùng đọc tồn cũ để tái hiện lost update.
+2. Consumer commit rồi dừng trước ACK để tái hiện duplicate delivery.
+3. Inbox unique constraint khiến delivery thứ hai trả lại outcome cũ.
+4. Hai consumers cạnh tranh các lô và vẫn tạo allocation theo strict FEFO.
+
+Mỗi excerpt phải chỉ ra arrange, điểm đồng bộ concurrency, assertion và kết quả. Load runner, fixture, retry loop và setup schema đầy đủ nằm trong test project; tài liệu liên kết tới source file thay vì sao chép hàng trăm dòng infrastructure code.
+
+### 10.4 Failure injection
+
+Harness có deterministic checkpoints để dừng execution tại:
+
+1. Sau business commit, trước khi Outbox dispatcher đọc record.
+2. Sau khi dispatcher claim Outbox, trước publish.
+3. Sau Publisher Confirm, trước khi đánh dấu Outbox sent.
+4. Sau consumer nhận delivery, trước business transaction.
+5. Sau business commit, trước ACK.
+6. Khi hai consumers cùng chọn lô FEFO đầu tiên.
+
+Mỗi test khởi động instance thay thế, chờ recovery và kiểm tra business invariant thay vì chỉ kiểm tra message count.
+
+### 10.5 Load parameters
+
+Load profile được mô tả bằng các input có thể tái lập:
+
+| Parameter | Default kiểm chứng | Ý nghĩa |
+| --- | ---: | --- |
+| `messageCount` | `10_000` | Tổng logical operations. |
+| `publisherInstances` | `3` | Số producer processes được mô phỏng. |
+| `consumerInstances` | `4` | Số competing consumer hosts. |
+| `consumersPerInstance` | `4` | Consumer channels trên mỗi host. |
+| `prefetchPerConsumer` | `16` | Maximum unacked trên mỗi channel. |
+| `payloadBytes` | `1_024` | Payload size gần với event thực tế. |
+| `duplicateRate` | `5%` | Tỷ lệ message ID được publish lại. |
+| `transientFailureRate` | `2%` | Tỷ lệ attempt lỗi trước khi thành công. |
+| `postCommitCrashRate` | `1%` | Tỷ lệ consumer dừng sau commit, trước ACK. |
+| `tenantCount` | `20` | Số tenant scopes. |
+| `shopCountPerTenant` | `10` | Số shop scopes trên mỗi tenant. |
+| `lotsPerProduct` | `8` | Số lô cạnh tranh cho một hàng hóa. |
+| `hotProductRatio` | `20%` | Tỷ lệ messages cùng cạnh tranh một product. |
+
+Default trên là profile học tập, không phải production target. Test runner cho phép override bằng environment variables để chạy smoke, baseline và stress profiles.
+
+### 10.6 Measurements và acceptance
+
+Harness ghi:
+
+- publish-confirm throughput và p50/p95/p99 latency;
+- end-to-end enqueue-to-commit latency;
+- queue drain time và oldest-message age;
+- redelivery, retry, duplicate và DLQ counts;
+- MySQL transaction duration, deadlock/retry count;
+- global connections, channels và maximum unacked;
+- số logical operations thành công, bị từ chối do thiếu tồn và còn unknown.
+
+Correctness acceptance không phụ thuộc throughput:
+
+- Không mất logical intent sau recovery.
+- Không duplicate logical effect.
+- Không tồn âm hoặc allocation lệch reservation.
+- Không cross-tenant/shop mutation.
+- Outbox và Inbox không còn record mắc kẹt ngoài recovery policy.
+
+Performance acceptance được suy ra từ workload target và phải ghi rõ hardware/topology. Nếu chưa có production SLO, kết quả chỉ là baseline measurement, không đặt ngưỡng tùy ý để tuyên bố hệ thống đủ tải.
+
+## 11. Quyết định và giới hạn
 
 - Chọn Transactional Outbox thay distributed transaction giữa MySQL và RabbitMQ.
 - Chấp nhận at-least-once và thiết kế duplicate-safe.
@@ -265,7 +407,7 @@ Tài liệu có sơ đồ Mermaid cho publish flow, consumer ACK flow, failure w
 - Không hứa throughput bằng số replica; mọi con số phải được đo end-to-end.
 - Reconciliation là correctness mechanism, không chỉ là công cụ sửa dữ liệu thủ công.
 
-## 11. Tiêu chí hoàn thành
+## 12. Tiêu chí hoàn thành
 
 - Tài liệu giải thích được nguyên nhân của từng pattern và failure window mà pattern xử lý.
 - Business cases bao phủ lost event, duplicate, wrong ordering, multi-instance, retry storm và multi-lot allocation.
@@ -274,3 +416,5 @@ Tài liệu có sơ đồ Mermaid cho publish flow, consumer ACK flow, failure w
 - RabbitMQ foundation build trên .NET 6, có configuration validation và publisher confirm.
 - Foundation không chứa business entity hoặc speculative consumer framework.
 - Automated checks xác nhận serialization, connection reuse, publish confirm và configuration failure.
+- Test harness chứng minh các failure của thiết kế trực giác trước khi xác nhận Outbox, Inbox, manual ACK và atomic FEFO allocation.
+- Load profile ghi đầy đủ parameters, topology, hardware assumptions, measurements và business invariants.
