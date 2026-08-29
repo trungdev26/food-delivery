@@ -20,7 +20,7 @@ internal static class RabbitMqEnvironment
         return client;
     }
 
-    internal static Task<IConnection> ConnectAsync() =>
+    internal static Task<IConnection> ConnectAsync(string connectionName = "food-delivery-tests") =>
         new ConnectionFactory
         {
             HostName = HostName,
@@ -30,5 +30,5 @@ internal static class RabbitMqEnvironment
             Password = Password,
             AutomaticRecoveryEnabled = true,
             TopologyRecoveryEnabled = true
-        }.CreateConnectionAsync("food-delivery-tests");
+        }.CreateConnectionAsync(connectionName);
 }

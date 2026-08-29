@@ -64,6 +64,17 @@ internal sealed class TestMessagingSchema
                 value VARCHAR(100) NOT NULL,
                 PRIMARY KEY (runId, aggregateId)
             );
+
+            CREATE TABLE IF NOT EXISTS TestStockCardLoad (
+                runId CHAR(36) NOT NULL,
+                id BIGINT NOT NULL,
+                shopId INT NOT NULL,
+                productId INT NOT NULL,
+                expiresAt DATETIME(6) NOT NULL,
+                available INT NOT NULL,
+                PRIMARY KEY (runId, id),
+                INDEX ix_stock_card_load_fefo (runId, shopId, productId, expiresAt, id)
+            );
             ");
     }
 
@@ -76,6 +87,7 @@ internal sealed class TestMessagingSchema
               DELETE FROM TestInbox WHERE runId = @runId;
               DELETE FROM TestOutbox WHERE runId = @runId;
               DELETE FROM TestAggregateVersion WHERE runId = @runId;
+              DELETE FROM TestStockCardLoad WHERE runId = @runId;
               DELETE FROM TestInventoryLot WHERE runId = @runId;
               DELETE FROM TestOrder WHERE runId = @runId;",
             new { runId });
