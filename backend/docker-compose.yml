@@ -16,5 +16,25 @@ services:
       timeout: 5s
       retries: 10
 
+  rabbitmq:
+    image: rabbitmq:4.1.8-management-alpine
+    container_name: food-delivery-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: food_app
+      RABBITMQ_DEFAULT_PASS: food_dev
+      RABBITMQ_DEFAULT_VHOST: food
+    ports:
+      - "5673:5672"
+      - "15673:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
 volumes:
   mysql_data:
+  rabbitmq_data:
