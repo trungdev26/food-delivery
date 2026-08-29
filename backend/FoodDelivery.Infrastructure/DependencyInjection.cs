@@ -2,6 +2,8 @@ using FoodDelivery.Application.Abstractions;
 using FoodDelivery.Infrastructure.Persistence;
 using FoodDelivery.Infrastructure.Tenancy;
 using FoodDelivery.Infrastructure.Events;
+using FoodDelivery.Application.Abstractions.Messaging;
+using FoodDelivery.Infrastructure.Messaging;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -25,6 +27,18 @@ public static class DependencyInjection
             new EfDapperUnitOfWorkFactory(
                 connectionString,
                 provider.GetRequiredService<IDomainEventDispatcher>()));
+
+        var rabbitMqOptions = configuration
+            .GetSection(RabbitMqOptions.SectionName)
+            .Get<RabbitMqOptions>() ?? new RabbitMqOptions();
+        rabbitMqOptions.EnsureValid();
+        services.AddSingleton(rabbitMqOptions);
+        services.AddSingleton<RabbitMqConnectionManager>();
+        services.AddSingleton<RabbitMqPublisher>();
+        services.AddSingleton<IIntegrationEventPublisher>(provider =>
+            provider.GetRequiredService<RabbitMqPublisher>());
+        services.AddHealthChecks()
+            .AddCheck<RabbitMqHealthCheck>("rabbitmq", tags: new[] { "ready" });
 
         return services;
     }
