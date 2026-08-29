@@ -396,6 +396,42 @@ Correctness acceptance không phụ thuộc throughput:
 
 Performance acceptance được suy ra từ workload target và phải ghi rõ hardware/topology. Nếu chưa có production SLO, kết quả chỉ là baseline measurement, không đặt ngưỡng tùy ý để tuyên bố hệ thống đủ tải.
 
+### 10.7 Bằng chứng xuất hiện trong tài liệu
+
+Sơ đồ Mermaid mô phỏng sequence để giải thích mechanism. Các value, rate và outcome được gọi là kết quả phải lấy từ test run thật.
+
+Tài liệu ghi lại các trường RabbitMQ mà người vận hành nhìn thấy:
+
+- exchange, routing key, queue và consumer tag;
+- message properties như `message_id`, `content_type`, `delivery_mode`, `type` và `correlation_id`;
+- application headers như contract version, tenant, shop và attempt;
+- queue values `Ready`, `Unacked`, `Total` và `Consumers`;
+- publish, deliver, ACK và redelivery rates;
+- `Redelivered` flag và `x-death` headers khi message đi qua retry/DLQ;
+- connections, channels, prefetch và unacked deliveries trên từng consumer.
+
+Mỗi reference run phải công bố:
+
+```text
+Environment và hardware
+RabbitMQ/MySQL topology
+Input load parameters
+Failure injection point
+Observed Management UI/API values
+Observed MySQL state
+Business invariant result
+Throughput và latency percentiles
+Giới hạn của phép thử
+```
+
+Ba execution profiles được chạy độc lập:
+
+1. Một RabbitMQ node và một MySQL node để kiểm tra correctness cơ bản.
+2. Nhiều application publisher/consumer instances trên shared broker để kiểm tra competing consumers và global concurrency.
+3. Ba RabbitMQ nodes với quorum queue để dừng queue leader và quan sát confirm, failover, recovery và redelivery.
+
+Mock không được dùng để kết luận ACK, redelivery, Publisher Confirm, broker recovery, quorum failover hoặc inventory correctness. Mock chỉ áp dụng cho serialization và configuration validation không phụ thuộc I/O.
+
 ## 11. Quyết định và giới hạn
 
 - Chọn Transactional Outbox thay distributed transaction giữa MySQL và RabbitMQ.
