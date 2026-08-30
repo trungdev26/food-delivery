@@ -75,7 +75,32 @@ internal sealed class TestMessagingSchema
                 PRIMARY KEY (runId, id),
                 INDEX ix_stock_card_load_fefo (runId, shopId, productId, expiresAt, id)
             );
+
+            CREATE TABLE IF NOT EXISTS TestOutboxLease (
+                runId CHAR(36) NOT NULL,
+                messageId CHAR(36) NOT NULL,
+                payload JSON NOT NULL,
+                occurredAt DATETIME(6) NOT NULL,
+                sentAt DATETIME(6) NULL,
+                lockedBy VARCHAR(100) NULL,
+                lockedUntil DATETIME(6) NULL,
+                attempts INT NOT NULL DEFAULT 0,
+                PRIMARY KEY (runId, messageId),
+                INDEX ix_outbox_lease_claim (runId, sentAt, lockedUntil, occurredAt, messageId),
+                INDEX ix_outbox_claim_order (runId, sentAt, occurredAt, messageId)
+            );
             ");
+
+        try
+        {
+            await connection.ExecuteAsync(@"
+                CREATE INDEX ix_outbox_claim_order
+                ON TestOutboxLease(runId, sentAt, occurredAt, messageId);");
+        }
+        catch (MySqlException exception) when (exception.Number == 1061)
+        {
+            // Existing test database already has the index.
+        }
     }
 
     internal async Task CleanupAsync(Guid runId)
@@ -88,6 +113,7 @@ internal sealed class TestMessagingSchema
               DELETE FROM TestOutbox WHERE runId = @runId;
               DELETE FROM TestAggregateVersion WHERE runId = @runId;
               DELETE FROM TestStockCardLoad WHERE runId = @runId;
+              DELETE FROM TestOutboxLease WHERE runId = @runId;
               DELETE FROM TestInventoryLot WHERE runId = @runId;
               DELETE FROM TestOrder WHERE runId = @runId;",
             new { runId });
