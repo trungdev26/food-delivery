@@ -739,6 +739,51 @@ Sự khác biệt không đến từ RabbitMQ tuning. Database model ban đầu 
 
 Load test vì thế phải kiểm tra transaction latency, lock wait, connection pool và business outcomes. Chỉ số messages/second không thể giải thích bottleneck này.
 
+### Gộp yêu cầu tính lại thẻ kho theo InventoryKey
+
+Một message không nhất thiết phải tương ứng với một lần tính lại toàn bộ thẻ kho. Với một `InventoryKey` có 50.000 thẻ, 101 message liên tiếp sẽ tạo ra 5.050.000 lượt xử lý row nếu consumer chạy phép tính sau mỗi lần nhận message.
+
+Phép thử dùng một durable intent trong MySQL. Consumer chỉ tăng `RequestedVersion`, cập nhật thời điểm yêu cầu gần nhất, commit rồi ACK. Worker chờ `Debounce = 200 ms`, nhưng không chờ quá `MaxWait = 2 s`, sau đó chụp version hiện tại và tính lại 50.000 thẻ. Message version 101 được phát đúng lúc pass đầu đã bắt đầu.
+
+```text
+50.000 stock cards
+100 messages trong initial burst
+1 message phát sinh giữa recalculation
+Debounce: 200 ms
+MaxWait: 2 s
+```
+
+Một lần chạy tham chiếu cho kết quả:
+
+| Metric | Kết quả |
+|---|---:|
+| Message đã ACK | 101/101 |
+| Queue Ready / Unacked khi kết thúc | 0 / 0 |
+| RequestedVersion / CompletedVersion | 101 / 101 |
+| Version nhỏ nhất / lớn nhất trên 50.000 thẻ | 101 / 101 |
+| Row đã cập nhật trước khi message 101 được ACK | 5.000 |
+| Số lần recalculation | 2 |
+| Khối lượng baseline tương đương | 5.050.000 row visits |
+| Khối lượng coalescing thực tế | 100.000 row updates |
+| Thời gian ACK initial burst | khoảng 1,73 giây |
+| Thời gian ACK message cuối | khoảng 18 ms |
+| Tổng thời gian | khoảng 2,61 giây |
+
+`MaxWait` có thể hết hạn trước khi toàn bộ burst được consume. Khi đó pass đầu xử lý một version nhỏ hơn 100; đây là giới hạn độ trễ có chủ đích, không phải mất message. Vì `RequestedVersion` vẫn tiếp tục tăng trong MySQL, worker chạy pass kế tiếp cho version mới nhất. Điều kiện hoàn thành là `CompletedVersion = RequestedVersion`, không phải “mỗi message tạo một pass”.
+
+Deadline được tính hoàn toàn bằng clock của MySQL. Trộn `UTC_TIMESTAMP()` trong database với clock của application process làm debounce phụ thuộc clock skew giữa các máy và đã tạo kết quả không ổn định trong lần thử đầu.
+
+Chạy lại profile:
+
+```powershell
+$env:RABBIT_INVENTORY_COALESCING='1'
+dotnet test backend/FoodDelivery.Infrastructure.Tests/FoodDelivery.Infrastructure.Tests.csproj --filter FullyQualifiedName~InventoryRecalculationCoalescingTests
+```
+
+Phép thử này chạy coalescing thật trên RabbitMQ, MySQL và xác nhận cardinality đúng 50.000 row. Worker cập nhật 5.000 row đầu tiên rồi mới phát tín hiệu để message 101 được publish và ACK; 45.000 row còn lại của pass đầu được xử lý sau thời điểm đó. Tổng `100.000 row updates` lấy từ affected rows của MySQL, không phải giá trị suy ra từ cấu hình.
+
+Giá trị baseline là khối lượng công việc tương đương `101 × 50.000`, không phải thời gian đo từ stored procedure hiện có. Muốn so sánh latency của procedure cần chạy chính procedure đó trên schema và execution plan của hệ thống sở hữu dữ liệu.
+
 ## 18. RabbitMQ Management UI
 
 Dashboard biểu diễn technical state của broker:
