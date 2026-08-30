@@ -89,6 +89,24 @@ internal sealed class TestMessagingSchema
                 INDEX ix_outbox_lease_claim (runId, sentAt, lockedUntil, occurredAt, messageId),
                 INDEX ix_outbox_claim_order (runId, sentAt, occurredAt, messageId)
             );
+
+            CREATE TABLE IF NOT EXISTS TestReliabilityInbox (
+                runId CHAR(36) NOT NULL,
+                consumerName VARCHAR(100) NOT NULL,
+                tenantId INT NOT NULL,
+                shopId INT NOT NULL,
+                messageId INT NOT NULL,
+                processedAt DATETIME(6) NOT NULL,
+                PRIMARY KEY (runId, consumerName, tenantId, shopId, messageId)
+            );
+
+            CREATE TABLE IF NOT EXISTS TestReliabilityEffectV2 (
+                runId CHAR(36) NOT NULL,
+                shopId INT NOT NULL,
+                bucketId INT NOT NULL,
+                applied INT NOT NULL,
+                PRIMARY KEY (runId, shopId, bucketId)
+            );
             ");
 
         try
@@ -114,6 +132,8 @@ internal sealed class TestMessagingSchema
               DELETE FROM TestAggregateVersion WHERE runId = @runId;
               DELETE FROM TestStockCardLoad WHERE runId = @runId;
               DELETE FROM TestOutboxLease WHERE runId = @runId;
+              DELETE FROM TestReliabilityInbox WHERE runId = @runId;
+              DELETE FROM TestReliabilityEffectV2 WHERE runId = @runId;
               DELETE FROM TestInventoryLot WHERE runId = @runId;
               DELETE FROM TestOrder WHERE runId = @runId;",
             new { runId });
