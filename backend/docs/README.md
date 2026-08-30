@@ -1,37 +1,39 @@
 # Backend Technical Documentation
 
-Đây là entry point và reading order chính thức của backend. Mỗi chủ đề chỉ có một source of truth.
+Đây là entry point và reading order chính thức của backend. Mỗi chủ đề có một source of truth; business type như `Shop`, `HangHoa`, `DonHang` được dùng để kiểm tra thiết kế, không khẳng định module đó đã được triển khai.
 
 ## Reading order
 
-1. [Architecture Overview](architecture/architecture-overview.md) — hệ thống được chia như thế nào và vì sao.
-2. [DDD Layering and Code Placement](architecture/ddd-layering-and-code-placement.md) — quyết định code thuộc project/folder nào.
-3. [Backend Runtime Flow](architecture/backend-runtime-flow.md) — request chạy xuyên suốt backend ra sao.
+1. [Architecture Overview](architecture/architecture-overview.md) — ranh giới hệ thống và lý do phân chia.
+2. [DDD Layering and Code Placement](architecture/ddd-layering-and-code-placement.md) — quyết định code thuộc project nào.
+3. [Backend Runtime Flow](architecture/backend-runtime-flow.md) — startup, request, transaction và publish flow.
 4. [Multi-tenancy Foundation](architecture/multi-tenancy-foundation.md) — resolve và isolate Tenant.
-5. [Persistence, Transactions and Concurrency](architecture/persistence-transactions-and-concurrency.md) — EF Core, Dapper, UOW, MySQL isolation và locking.
-6. [Event Architecture](architecture/event-architecture.md) — Domain Event hiện tại và đường nâng cấp Outbox.
+5. [Persistence, Transactions and Concurrency](architecture/persistence-transactions-and-concurrency.md) — EF Core, Dapper, Unit of Work, MySQL isolation và locking.
+6. [Event Architecture](architecture/event-architecture.md) — Domain Event, Integration Event và reliability boundary.
+7. [RabbitMQ Reliable Messaging](architecture/rabbitmq-reliable-messaging.md) — broker internals, ACK, retry, Outbox/Inbox, multi-instance, FEFO và load evidence.
 
-## Cách đọc quyết định kỹ thuật
-
-Mỗi tài liệu trả lời theo chuỗi:
+## Cách đọc một quyết định kỹ thuật
 
 ```text
-Context → Senior reasoning → Decision → Problem solved
-        → Business example → Trade-off/limit → When to upgrade
+Business case → invariant → failure window → test tái hiện
+              → mechanism → trade-off → tín hiệu cần nâng cấp
 ```
 
-Business type như `Shop`, `HangHoa`, `DonHang` là ví dụ để kiểm tra thiết kế. Chúng không đồng nghĩa module đó đã được implement.
+Cách trình bày này tránh chọn RabbitMQ, cache, lock hoặc một design pattern chỉ vì chúng phổ biến. Mỗi thành phần phải bảo vệ một invariant hoặc giải quyết một bottleneck đo được.
 
-## Current foundation
+## Foundation đang có
 
-- Clean Architecture bốn project: Domain, Application, Infrastructure, API.
-- Domain primitives: Entity, Aggregate Root, Value Object, Domain Event, Domain Exception.
+- Clean Architecture gồm Domain, Application, Infrastructure và API.
+- Domain primitives: Entity, Aggregate Root, Value Object, Domain Event và Domain Exception.
 - Multi-tenant request context từ authenticated claim hoặc subdomain.
-- EF Core và Dapper dùng cùng connection/transaction cho write use case.
+- EF Core và Dapper dùng chung connection/transaction cho write use case.
 - In-process Domain Event trong cùng database transaction.
 - Optimistic concurrency bằng `ConcurrencyToken` trên Aggregate Root.
+- RabbitMQ long-lived connection, confirmed publisher, mandatory routing và readiness check.
 - Centralized exception response và composition root tại API.
 
-## Chưa thêm có chủ đích
+## Ranh giới chưa đưa vào production
 
-Generic Repository, CQRS/Mediator framework, message broker, Outbox, distributed cache, automatic retry và business module chưa có use case thật. Chúng là upgrade path, không phải foundation mặc định.
+Outbox, Inbox, retry/DLQ consumer, reconciliation và strict FEFO allocator đã được kiểm chứng bằng integration/load test trên MySQL và RabbitMQ thật, nhưng vẫn nằm trong test project. Chúng được đưa vào production cùng business flow sở hữu transaction và schema tương ứng; không tạo table, worker hoặc abstraction dự phòng chỉ để “có sẵn”.
+
+Generic Repository, CQRS/Mediator framework, distributed cache và automatic business retry cũng chưa có use case buộc phải tồn tại.
