@@ -71,6 +71,12 @@ public sealed class RabbitMqPublisher : IIntegrationEventPublisher, IAsyncDispos
                 basicProperties: properties,
                 message.Payload,
                 cancellationToken);
+            MessagingMetrics.Published.Add(1, new KeyValuePair<string, object?>("event.name", message.EventName));
+        }
+        catch
+        {
+            MessagingMetrics.PublishFailures.Add(1);
+            throw;
         }
         finally
         {

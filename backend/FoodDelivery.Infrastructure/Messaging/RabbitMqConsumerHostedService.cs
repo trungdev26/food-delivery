@@ -85,6 +85,7 @@ public sealed class RabbitMqConsumerHostedService : BackgroundService
                     registration.ConsumerName, tenantId, shopId, messageId, cancellationToken))
             {
                 await unitOfWork.RollbackAsync(cancellationToken);
+                MessagingMetrics.Duplicates.Add(1, new KeyValuePair<string, object?>("consumer", registration.ConsumerName));
                 await channel.BasicAckAsync(delivery.DeliveryTag, false, cancellationToken);
                 return;
             }
@@ -92,6 +93,7 @@ public sealed class RabbitMqConsumerHostedService : BackgroundService
             _logger.LogDebug("Consumer {ConsumerName} acquired inbox message {MessageId}", registration.ConsumerName, messageId);
             await registration.HandleAsync(delivery.Body, unitOfWork, cancellationToken);
             await unitOfWork.CommitAsync(cancellationToken);
+            MessagingMetrics.Consumed.Add(1, new KeyValuePair<string, object?>("consumer", registration.ConsumerName));
             await channel.BasicAckAsync(delivery.DeliveryTag, false, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -109,7 +111,10 @@ public sealed class RabbitMqConsumerHostedService : BackgroundService
             if (RejectedDeaths(delivery.BasicProperties.Headers) + 1 >= registration.MaxAttempts)
                 await PublishDeadAndAckAsync(channel, registration, delivery, "max-attempts", cancellationToken);
             else
+            {
+                MessagingMetrics.Retries.Add(1, new KeyValuePair<string, object?>("consumer", registration.ConsumerName));
                 await channel.BasicNackAsync(delivery.DeliveryTag, false, false, cancellationToken);
+            }
         }
     }
 
@@ -163,6 +168,9 @@ public sealed class RabbitMqConsumerHostedService : BackgroundService
             ? new Dictionary<string, object?>()
             : new Dictionary<string, object?>(delivery.BasicProperties.Headers);
         headers["x-failure-reason"] = reason;
+        MessagingMetrics.DeadLettered.Add(1,
+            new KeyValuePair<string, object?>("consumer", registration.ConsumerName),
+            new KeyValuePair<string, object?>("reason", reason));
         await channel.BasicPublishAsync(
             $"{_options.ExchangeName}.dead",
             registration.QueueName,

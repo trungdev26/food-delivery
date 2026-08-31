@@ -30,6 +30,7 @@ public sealed class OutboxDispatcher : BackgroundService
     public async Task<int> DispatchOnceAsync(CancellationToken cancellationToken = default)
     {
         var messages = await ClaimAsync(cancellationToken);
+        MessagingMetrics.OutboxClaimed.Add(messages.Count);
         foreach (var message in messages)
         {
             try

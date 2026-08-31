@@ -7,8 +7,11 @@ using FoodDelivery.Infrastructure;
 using FoodDelivery.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using FoodDelivery.Api.Diagnostics;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
 
 // Add services to the container.
 
@@ -42,6 +45,7 @@ if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
+    app.MapMessagingDiagnostics();
 
     using var scope = app.Services.CreateScope();
     try
