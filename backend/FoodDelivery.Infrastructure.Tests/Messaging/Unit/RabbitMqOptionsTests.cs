@@ -50,6 +50,23 @@ public sealed class RabbitMqOptionsTests
         Assert.Contains("RabbitMq:TlsServerName", exception.Message);
     }
 
+    [Theory]
+    [InlineData(0, 30, 500, "OutboxBatchSize")]
+    [InlineData(50, 0, 500, "OutboxLeaseSeconds")]
+    [InlineData(50, 30, 0, "OutboxPollMilliseconds")]
+    public void EnsureValid_RejectsInvalidOutboxSettings(
+        int batchSize, int leaseSeconds, int pollMilliseconds, string expectedSetting)
+    {
+        var options = ValidOptions();
+        options.OutboxBatchSize = batchSize;
+        options.OutboxLeaseSeconds = leaseSeconds;
+        options.OutboxPollMilliseconds = pollMilliseconds;
+
+        var exception = Assert.Throws<InvalidOperationException>(options.EnsureValid);
+
+        Assert.Contains(expectedSetting, exception.Message);
+    }
+
     private static RabbitMqOptions ValidOptions() => new()
     {
         HostName = "localhost",

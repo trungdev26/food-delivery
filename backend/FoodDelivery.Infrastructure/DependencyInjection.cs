@@ -35,6 +35,12 @@ public static class DependencyInjection
         services.AddSingleton(rabbitMqOptions);
         services.AddSingleton<RabbitMqConnectionManager>();
         services.AddSingleton<RabbitMqPublisher>();
+        services.AddSingleton(provider => new OutboxDispatcher(
+            connectionString,
+            provider.GetRequiredService<RabbitMqPublisher>(),
+            rabbitMqOptions,
+            provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<OutboxDispatcher>>()));
+        services.AddHostedService(provider => provider.GetRequiredService<OutboxDispatcher>());
         services.AddSingleton<IIntegrationEventPublisher>(provider =>
             provider.GetRequiredService<RabbitMqPublisher>());
         services.AddHealthChecks()

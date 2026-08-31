@@ -15,6 +15,9 @@ public sealed class RabbitMqOptions
     public int RequestedHeartbeatSeconds { get; set; } = 30;
     public bool TlsEnabled { get; set; }
     public string TlsServerName { get; set; } = string.Empty;
+    public int OutboxBatchSize { get; set; } = 50;
+    public int OutboxLeaseSeconds { get; set; } = 30;
+    public int OutboxPollMilliseconds { get; set; } = 500;
 
     public void EnsureValid()
     {
@@ -30,6 +33,9 @@ public sealed class RabbitMqOptions
         if (NetworkRecoverySeconds < 1) errors.Add("RabbitMq:NetworkRecoverySeconds must be positive.");
         if (RequestedHeartbeatSeconds < 1) errors.Add("RabbitMq:RequestedHeartbeatSeconds must be positive.");
         if (TlsEnabled) Required(TlsServerName, "RabbitMq:TlsServerName", errors);
+        if (OutboxBatchSize < 1) errors.Add("RabbitMq:OutboxBatchSize must be positive.");
+        if (OutboxLeaseSeconds < 1) errors.Add("RabbitMq:OutboxLeaseSeconds must be positive.");
+        if (OutboxPollMilliseconds < 1) errors.Add("RabbitMq:OutboxPollMilliseconds must be positive.");
 
         if (errors.Count > 0) throw new InvalidOperationException(string.Join(Environment.NewLine, errors));
     }
