@@ -67,30 +67,30 @@ commit
 Outbox dispatcher → RabbitMQ Publisher Confirm
 ```
 
-Production base chưa có business Outbox table vì chưa có use case sở hữu nó. Direct publisher không được đặt sau business commit rồi gọi là reliable dual-write.
+`IUnitOfWork.EnqueueIntegrationEvent` thêm Outbox row vào đúng `ApplicationDbContext` đang giữ business transaction. Business module quyết định event và routing key; foundation chịu trách nhiệm serialize transport metadata và publish sau commit.
 
-## 4. RabbitMQ publish flow hiện tại
+## 4. RabbitMQ Outbox publish flow
 
 ```mermaid
 sequenceDiagram
     participant U as Application use case
-    participant P as IIntegrationEventPublisher
+    participant DB as MySQL
+    participant O as Outbox Dispatcher
     participant C as Connection Manager
     participant R as RabbitMQ
-    U->>P: PublishAsync(event, routingKey)
-    P->>C: Get open connection
-    C-->>P: Một long-lived connection/process
-    P->>R: Declare durable direct exchange
-    P->>R: Publish persistent + mandatory
-    R-->>P: Confirm hoặc return/nack
-    P-->>U: Complete hoặc throw
+    U->>DB: Commit business state + Outbox
+    O->>DB: Claim batch bằng SKIP LOCKED + lease
+    DB-->>O: Commit lease
+    O->>C: Get open connection
+    C-->>O: Một long-lived connection/process
+    O->>R: Publish persistent + mandatory
+    R-->>O: Confirm hoặc return/nack
+    O->>DB: Mark SentAtUtc sau Confirm
 ```
 
-Publisher giữ một confirm-enabled channel và serialize publish bằng `SemaphoreSlim`. Đây là baseline có ownership đơn giản và an toàn. Chỉ tạo channel pool khi đo được confirm throughput không đáp ứng target.
+Publisher giữ một confirm-enabled channel và serialize publish bằng `SemaphoreSlim`. Dispatcher không giữ MySQL transaction trong lúc chờ RabbitMQ; nhiều instance claim các batch khác nhau bằng `FOR UPDATE SKIP LOCKED`. Lease hết hạn cho phép instance khác lấy lại row nếu worker dừng giữa chừng.
 
-## 5. Consumer flow mục tiêu
-
-Consumer production chưa được thêm trong phase hiện tại. Khi có business handler, thứ tự an toàn là:
+## 5. Consumer flow
 
 ```mermaid
 sequenceDiagram
@@ -108,7 +108,13 @@ sequenceDiagram
 
 ACK trước commit có thể làm mất business effect. Commit trước ACK có thể tạo redelivery, vì vậy Inbox và business mutation phải ở cùng transaction.
 
-## 6. Error mapping
+`RabbitMqConsumerHostedService` tạo main/retry/dead topology cho từng `RabbitMqConsumerRegistration`, đặt prefetch và dùng manual ACK. Inbox key có scope `consumerName + tenantId + shopId + messageId`. Duplicate rollback UOW rồi ACK; transient failure đi qua retry queue có TTL; permanent failure hoặc hết số lần retry được confirmed publish sang DLQ trước khi ACK message gốc.
+
+## 6. Messaging Diagnostics trong Development
+
+`GET /dev/messaging` hiển thị trạng thái Outbox gần nhất và số message trong queue chẩn đoán. `POST /dev/messaging/publish` ghi một `DiagnosticPing` vào Outbox bằng UOW thật. Trang chỉ được map trong Development và cho phép kiểm tra toàn bộ luồng MySQL → dispatcher → RabbitMQ mà không phụ thuộc frontend.
+
+## 7. Error mapping
 
 | Error | Boundary xử lý | HTTP outcome |
 |---|---|---|

@@ -18,7 +18,7 @@ Business case xuyên suốt là một nền tảng đặt đồ ăn multi-tenant
 - Menu có thể dùng chung trong tenant hoặc được đồng bộ xuống chi nhánh.
 - Tồn kho tương lai có thể được theo dõi theo nhiều lô.
 
-Production base hiện chỉ triển khai phần kết nối và publish trên .NET 6. Consumer nghiệp vụ, Outbox, Inbox và FEFO vẫn là reference model đã được kiểm chứng bằng integration test.
+Production base trên .NET 6 đã có connection manager, confirmed publisher, Transactional Outbox, Inbox idempotency, consumer runtime, retry và DLQ. Các phần về `DonHang`, FEFO và tính giá vốn vẫn là business example; foundation không tạo trước entity hoặc routing key nghiệp vụ.
 
 ## 1. Luồng xử lý đồng bộ
 
@@ -272,7 +272,12 @@ Boundary này có lý do cụ thể trong kiến trúc hiện tại: Application
   "ConnectionName": "food-delivery-api",
   "ExchangeName": "food.events",
   "NetworkRecoverySeconds": 5,
-  "RequestedHeartbeatSeconds": 30
+  "RequestedHeartbeatSeconds": 30,
+  "TlsEnabled": false,
+  "TlsServerName": "",
+  "OutboxBatchSize": 50,
+  "OutboxLeaseSeconds": 30,
+  "OutboxPollMilliseconds": 500
 }
 ```
 
@@ -376,6 +381,7 @@ DeliveryMode    = persistent
 CorrelationId   = event.CorrelationId
 x-event-version = event.ContractVersion
 x-tenant-id     = event.TenantId
+x-shop-id       = event.ShopId
 ```
 
 `MessageId` là logical identity, không tạo mới mỗi lần retry. `CorrelationId` nối HTTP request, Outbox, broker và consumer logs. `ContractVersion` cho phép producer và consumer rolling deployment mà không đoán schema từ payload.
@@ -621,7 +627,7 @@ Index sau đó được đổi theo filter và stable order:
 
 Bốn worker sau thay đổi claim đủ 100 intent. `SKIP LOCKED` chỉ tạo concurrency tốt khi execution plan và batch distribution cũng phù hợp.
 
-Production base chưa thêm Outbox table/dispatcher vì chưa có business write sở hữu event. Tạo schema và worker chung chung từ trước sẽ buộc business sau này thích nghi với một contract chưa được xác định.
+Production base lưu Outbox ở `OutboxMessages` và chạy `OutboxDispatcher` trên mọi instance. Foundation chỉ định nghĩa transport metadata và lease; business module vẫn sở hữu event contract, routing key và thời điểm gọi `EnqueueIntegrationEvent`.
 
 ## 14. Ordering trong hệ thống đa instance
 
@@ -866,29 +872,15 @@ Foundation hiện chạy trên .NET 6 và `RabbitMQ.Client 7.2.2`.
 
 Việc nâng runtime không làm thay đổi các invariant về ACK, idempotency, Outbox hoặc concurrency.
 
-## 21. Phạm vi của Production Foundation
+### Messaging Diagnostics trong Development
 
-Đã có trong `FoodDelivery.Infrastructure`:
+API map `/dev/messaging` khi `IHostEnvironment.IsDevelopment()` trả về `true`. Nút **Gửi test event qua Outbox** tạo một `DiagnosticPing` bằng chính `IUnitOfWork`, sau đó trang hiển thị `Pending`, `Sent`, số lần claim và `LastError` của các Outbox row gần nhất. Queue `food.diagnostics` cho biết số message đã được RabbitMQ nhận nhưng chưa đọc.
 
-- validated `RabbitMqOptions`;
-- một long-lived connection manager trên mỗi process;
-- confirmed persistent publisher với mandatory routing;
-- integration-event wire metadata;
-- automatic connection/topology recovery;
-- readiness health check;
-- integration tests chạy với RabbitMQ thật.
+Luồng này kiểm tra cùng lúc MySQL transaction, Outbox dispatcher, Publisher Confirm, mandatory routing và RabbitMQ connection mà không cần sửa frontend. Endpoint không được map trong production; đây là công cụ chẩn đoán, không phải business API.
 
-Chưa đưa vào production:
+Các metric phát từ meter `FoodDelivery.Messaging` gồm publish, publish failure, Outbox claim, consume, duplicate, retry và dead-letter. Metric không gắn `TenantId`, `ShopId` hoặc `MessageId` để tránh cardinality tăng theo dữ liệu nghiệp vụ.
 
-- business queue và consumer;
-- Outbox/Inbox schema cùng dispatcher;
-- retry/DLQ topology;
-- aggregate version handler;
-- inventory allocator và strict FEFO.
-
-Những phần này không bị bỏ quên. Chúng đang ở test-only reference implementation để chứng minh failure model trước khi business module thật xác định transaction, table ownership và contract.
-
-## 22. Thuật ngữ
+## 21. Thuật ngữ
 
 | Keyword | Ý nghĩa |
 |---|---|
@@ -912,7 +904,7 @@ Những phần này không bị bỏ quên. Chúng đang ở test-only reference
 | FEFO | Xuất lô hết hạn sớm trước |
 | Poison message | Message luôn thất bại với handler hiện tại |
 
-## 23. Tài liệu tham khảo
+## 22. Tài liệu tham khảo
 
 - [RabbitMQ Tutorials](https://www.rabbitmq.com/tutorials) — học topology theo thứ tự Hello World, Work Queue, Publish/Subscribe và Routing.
 - [AMQP 0-9-1 Model Explained](https://www.rabbitmq.com/tutorials/amqp-concepts) — bản chất exchange, queue, binding, ACK và prefetch.
