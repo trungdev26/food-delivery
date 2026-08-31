@@ -1,6 +1,7 @@
 using FoodDelivery.Application.Abstractions;
 using FoodDelivery.Domain.Common;
 using FoodDelivery.Domain.Tenancy;
+using FoodDelivery.Infrastructure.Persistence.Messaging;
 using Microsoft.EntityFrameworkCore;
 
 namespace FoodDelivery.Infrastructure.Persistence;
@@ -10,6 +11,8 @@ public sealed class ApplicationDbContext : DbContext, IApplicationDbContext
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : base(options) { }
 
     public DbSet<Tenant> Tenants => Set<Tenant>();
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
+    public DbSet<InboxMessage> InboxMessages => Set<InboxMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

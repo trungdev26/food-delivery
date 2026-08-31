@@ -94,6 +94,7 @@ public sealed class RabbitMqPublisherTests
         DateTimeOffset OccurredAtUtc,
         string? CorrelationId,
         Guid? TenantId,
+        Guid? ShopId,
         Guid HangHoaId,
         int SoLuong) : IIntegrationEvent
     {
@@ -103,6 +104,7 @@ public sealed class RabbitMqPublisherTests
             1,
             DateTimeOffset.UtcNow,
             $"order-{Guid.NewGuid():N}",
+            Guid.NewGuid(),
             Guid.NewGuid(),
             Guid.NewGuid(),
             10);

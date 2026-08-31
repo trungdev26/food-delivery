@@ -8,4 +8,5 @@ public interface IIntegrationEvent
     DateTimeOffset OccurredAtUtc { get; }
     string? CorrelationId { get; }
     Guid? TenantId { get; }
+    Guid? ShopId { get; }
 }

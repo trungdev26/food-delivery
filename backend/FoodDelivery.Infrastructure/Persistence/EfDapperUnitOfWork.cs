@@ -1,6 +1,9 @@
 using System.Data.Common;
+using System.Text.Json;
 using FoodDelivery.Application.Abstractions;
+using FoodDelivery.Application.Abstractions.Messaging;
 using FoodDelivery.Domain.Common;
+using FoodDelivery.Infrastructure.Persistence.Messaging;
 
 namespace FoodDelivery.Infrastructure.Persistence;
 
@@ -25,6 +28,25 @@ public sealed class EfDapperUnitOfWork : IUnitOfWork
     public IApplicationDbContext DbContext => _dbContext;
     public DbConnection Connection { get; }
     public DbTransaction Transaction { get; }
+
+    public void EnqueueIntegrationEvent(IIntegrationEvent integrationEvent, string routingKey)
+    {
+        EnsureActive();
+        ArgumentNullException.ThrowIfNull(integrationEvent);
+        if (string.IsNullOrWhiteSpace(routingKey))
+            throw new ArgumentException("Routing key is required.", nameof(routingKey));
+
+        _dbContext.OutboxMessages.Add(new OutboxMessage(
+            integrationEvent.MessageId,
+            integrationEvent.EventName,
+            integrationEvent.ContractVersion,
+            routingKey,
+            JsonSerializer.Serialize(integrationEvent, integrationEvent.GetType()),
+            integrationEvent.OccurredAtUtc.UtcDateTime,
+            integrationEvent.CorrelationId,
+            integrationEvent.TenantId,
+            integrationEvent.ShopId));
+    }
 
     public async Task CommitAsync(CancellationToken cancellationToken = default)
     {

@@ -10,6 +10,7 @@ public sealed class IntegrationEventContractTests
     {
         var messageId = Guid.NewGuid();
         var tenantId = Guid.NewGuid();
+        var shopId = Guid.NewGuid();
         var occurredAtUtc = DateTimeOffset.UtcNow;
         IIntegrationEvent integrationEvent = new TestIntegrationEvent(
             messageId,
@@ -17,7 +18,8 @@ public sealed class IntegrationEventContractTests
             1,
             occurredAtUtc,
             "order-001",
-            tenantId);
+            tenantId,
+            shopId);
 
         Assert.Equal(messageId, integrationEvent.MessageId);
         Assert.Equal("InventoryReserveRequested", integrationEvent.EventName);
@@ -25,6 +27,7 @@ public sealed class IntegrationEventContractTests
         Assert.Equal(occurredAtUtc, integrationEvent.OccurredAtUtc);
         Assert.Equal("order-001", integrationEvent.CorrelationId);
         Assert.Equal(tenantId, integrationEvent.TenantId);
+        Assert.Equal(shopId, integrationEvent.ShopId);
     }
 
     private sealed record TestIntegrationEvent(
@@ -33,5 +36,6 @@ public sealed class IntegrationEventContractTests
         int ContractVersion,
         DateTimeOffset OccurredAtUtc,
         string? CorrelationId,
-        Guid? TenantId) : IIntegrationEvent;
+        Guid? TenantId,
+        Guid? ShopId) : IIntegrationEvent;
 }
