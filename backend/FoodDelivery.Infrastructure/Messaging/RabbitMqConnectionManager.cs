@@ -25,6 +25,8 @@ public sealed class RabbitMqConnectionManager : IAsyncDisposable
             NetworkRecoveryInterval = TimeSpan.FromSeconds(options.NetworkRecoverySeconds),
             RequestedHeartbeat = TimeSpan.FromSeconds(options.RequestedHeartbeatSeconds)
         };
+        _factory.Ssl.Enabled = options.TlsEnabled;
+        _factory.Ssl.ServerName = options.TlsServerName;
     }
 
     public async Task<IConnection> GetConnectionAsync(CancellationToken cancellationToken = default)

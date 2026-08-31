@@ -39,6 +39,17 @@ public sealed class RabbitMqOptionsTests
         options.EnsureValid();
     }
 
+    [Fact]
+    public void EnsureValid_RequiresServerNameWhenTlsIsEnabled()
+    {
+        var options = ValidOptions();
+        options.TlsEnabled = true;
+
+        var exception = Assert.Throws<InvalidOperationException>(options.EnsureValid);
+
+        Assert.Contains("RabbitMq:TlsServerName", exception.Message);
+    }
+
     private static RabbitMqOptions ValidOptions() => new()
     {
         HostName = "localhost",

@@ -25,6 +25,23 @@ public sealed class RabbitMqPublisher : IIntegrationEventPublisher, IAsyncDispos
         where TEvent : IIntegrationEvent
     {
         ArgumentNullException.ThrowIfNull(integrationEvent);
+        await PublishRawAsync(new IntegrationMessage(
+            integrationEvent.MessageId,
+            integrationEvent.EventName,
+            integrationEvent.ContractVersion,
+            integrationEvent.OccurredAtUtc,
+            integrationEvent.CorrelationId,
+            integrationEvent.TenantId,
+            integrationEvent.ShopId,
+            JsonSerializer.SerializeToUtf8Bytes(integrationEvent, integrationEvent.GetType())), routingKey, cancellationToken);
+    }
+
+    public async Task PublishRawAsync(
+        IntegrationMessage message,
+        string routingKey,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(message);
         if (string.IsNullOrWhiteSpace(routingKey)) throw new ArgumentException("Routing key is required.", nameof(routingKey));
 
         await _publishGate.WaitAsync(cancellationToken);
@@ -33,26 +50,26 @@ public sealed class RabbitMqPublisher : IIntegrationEventPublisher, IAsyncDispos
             var channel = await GetChannelAsync(cancellationToken);
             var properties = new BasicProperties
             {
-                MessageId = integrationEvent.MessageId.ToString(),
-                Type = integrationEvent.EventName,
-                CorrelationId = integrationEvent.CorrelationId,
+                MessageId = message.MessageId.ToString(),
+                Type = message.EventName,
+                CorrelationId = message.CorrelationId,
                 ContentType = "application/json",
                 DeliveryMode = DeliveryModes.Persistent,
-                Timestamp = new AmqpTimestamp(integrationEvent.OccurredAtUtc.ToUnixTimeSeconds()),
+                Timestamp = new AmqpTimestamp(message.OccurredAtUtc.ToUnixTimeSeconds()),
                 Headers = new Dictionary<string, object?>
                 {
-                    ["x-event-version"] = integrationEvent.ContractVersion,
-                    ["x-tenant-id"] = integrationEvent.TenantId?.ToString() ?? string.Empty
+                    ["x-event-version"] = message.ContractVersion,
+                    ["x-tenant-id"] = message.TenantId?.ToString() ?? string.Empty,
+                    ["x-shop-id"] = message.ShopId?.ToString() ?? string.Empty
                 }
             };
-            var body = JsonSerializer.SerializeToUtf8Bytes(integrationEvent, integrationEvent.GetType());
 
             await channel.BasicPublishAsync(
                 _options.ExchangeName,
                 routingKey,
                 mandatory: true,
                 basicProperties: properties,
-                body,
+                message.Payload,
                 cancellationToken);
         }
         finally

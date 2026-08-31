@@ -38,9 +38,46 @@ public sealed class RabbitMqPublisherTests
             Assert.Equal(DeliveryModes.Persistent, delivery.BasicProperties.DeliveryMode);
             Assert.Equal(1, Convert.ToInt32(delivery.BasicProperties.Headers!["x-event-version"]));
             Assert.Equal(integrationEvent.TenantId!.Value.ToString(), HeaderText(delivery, "x-tenant-id"));
+            Assert.Equal(integrationEvent.ShopId!.Value.ToString(), HeaderText(delivery, "x-shop-id"));
 
             var body = JsonSerializer.Deserialize<TestIntegrationEvent>(delivery.Body.Span);
             Assert.Equal(integrationEvent, body);
+        }
+        finally
+        {
+            await channel.ExchangeDeleteAsync(options.ExchangeName);
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "RabbitMqIntegration")]
+    public async Task PublishRawAsync_PreservesPersistedPayloadAndMetadata()
+    {
+        var options = CreateOptions();
+        var queueName = $"publisher-raw.{Guid.NewGuid():N}";
+        const string routingKey = "inventory.raw.v1";
+        await using var manager = new RabbitMqConnectionManager(options);
+        await using var publisher = new RabbitMqPublisher(manager, options);
+        var connection = await manager.GetConnectionAsync();
+        await using var channel = await connection.CreateChannelAsync();
+        await channel.QueueDeclareAsync(queueName, durable: false, exclusive: false, autoDelete: true);
+        await channel.ExchangeDeclareAsync(options.ExchangeName, ExchangeType.Direct, durable: true);
+        await channel.QueueBindAsync(queueName, options.ExchangeName, routingKey);
+        var tenantId = Guid.NewGuid();
+        var shopId = Guid.NewGuid();
+        var payload = System.Text.Encoding.UTF8.GetBytes("{\"quantity\":10}");
+        var message = new IntegrationMessage(Guid.NewGuid(), "InventoryAdjusted", 2,
+            DateTimeOffset.UtcNow, "order-002", tenantId, shopId, payload);
+
+        try
+        {
+            await publisher.PublishRawAsync(message, routingKey);
+
+            var delivery = await channel.BasicGetAsync(queueName, autoAck: true);
+            Assert.NotNull(delivery);
+            Assert.Equal(payload, delivery!.Body.ToArray());
+            Assert.Equal(message.MessageId.ToString(), delivery.BasicProperties.MessageId);
+            Assert.Equal(shopId.ToString(), HeaderText(delivery, "x-shop-id"));
         }
         finally
         {

@@ -13,6 +13,8 @@ public sealed class RabbitMqOptions
     public string ExchangeName { get; set; } = string.Empty;
     public int NetworkRecoverySeconds { get; set; } = 5;
     public int RequestedHeartbeatSeconds { get; set; } = 30;
+    public bool TlsEnabled { get; set; }
+    public string TlsServerName { get; set; } = string.Empty;
 
     public void EnsureValid()
     {
@@ -27,6 +29,7 @@ public sealed class RabbitMqOptions
         if (Port is < 1 or > 65535) errors.Add("RabbitMq:Port must be between 1 and 65535.");
         if (NetworkRecoverySeconds < 1) errors.Add("RabbitMq:NetworkRecoverySeconds must be positive.");
         if (RequestedHeartbeatSeconds < 1) errors.Add("RabbitMq:RequestedHeartbeatSeconds must be positive.");
+        if (TlsEnabled) Required(TlsServerName, "RabbitMq:TlsServerName", errors);
 
         if (errors.Count > 0) throw new InvalidOperationException(string.Join(Environment.NewLine, errors));
     }
