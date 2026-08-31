@@ -4,6 +4,7 @@ using FoodDelivery.Application.Abstractions;
 using FoodDelivery.Application.Abstractions.Messaging;
 using FoodDelivery.Domain.Common;
 using FoodDelivery.Infrastructure.Persistence.Messaging;
+using Dapper;
 
 namespace FoodDelivery.Infrastructure.Persistence;
 
@@ -76,6 +77,25 @@ public sealed class EfDapperUnitOfWork : IUnitOfWork
             await TryRollbackAsync(CancellationToken.None);
             throw;
         }
+    }
+
+    public async Task<bool> TryBeginInboxMessageAsync(
+        string consumerName,
+        Guid tenantId,
+        Guid shopId,
+        Guid messageId,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureActive();
+        if (string.IsNullOrWhiteSpace(consumerName))
+            throw new ArgumentException("Consumer name is required.", nameof(consumerName));
+
+        var inserted = await Connection.ExecuteAsync(new CommandDefinition(@"
+            INSERT IGNORE INTO InboxMessages (ConsumerName,TenantId,ShopId,MessageId,ProcessedAtUtc)
+            VALUES (@ConsumerName,@TenantId,@ShopId,@MessageId,UTC_TIMESTAMP(6));",
+            new { ConsumerName = consumerName, TenantId = tenantId, ShopId = shopId, MessageId = messageId },
+            Transaction, cancellationToken: cancellationToken));
+        return inserted == 1;
     }
 
     public async Task RollbackAsync(CancellationToken cancellationToken = default)

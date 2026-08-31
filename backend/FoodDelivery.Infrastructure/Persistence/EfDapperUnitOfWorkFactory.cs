@@ -26,12 +26,11 @@ public sealed class EfDapperUnitOfWorkFactory : IUnitOfWorkFactory
         try
         {
             connection = new MySqlConnection(_connectionString);
-            await connection.OpenAsync(cancellationToken);
-            transaction = await connection.BeginTransactionAsync(cancellationToken);
-
             var options = new DbContextOptionsBuilder<ApplicationDbContext>()
                 .UseMySql(connection, ServerVersion)
                 .Options;
+            await connection.OpenAsync(cancellationToken);
+            transaction = await connection.BeginTransactionAsync(cancellationToken);
             dbContext = new ApplicationDbContext(options);
             await dbContext.Database.UseTransactionAsync(transaction, cancellationToken);
 
