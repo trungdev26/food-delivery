@@ -26,9 +26,15 @@ public sealed class ProductionConsumerTests
         var tenantId = Guid.NewGuid();
         var shopId = Guid.NewGuid();
         var calls = 0;
+        ConsumedIntegrationMessage? consumed = null;
         var registration = new RabbitMqConsumerRegistration(
             "production-consumer-test", queue, "test.consumer",
-            (_, _, _) => { Interlocked.Increment(ref calls); return Task.CompletedTask; },
+            (message, _, _) =>
+            {
+                consumed = message;
+                Interlocked.Increment(ref calls);
+                return Task.CompletedTask;
+            },
             RetryDelayMilliseconds: 50);
         var services = new ServiceCollection();
         services.AddSingleton<IUnitOfWorkFactory>(
@@ -65,6 +71,9 @@ public sealed class ProductionConsumerTests
             await Task.Delay(100);
 
             Assert.Equal(1, Volatile.Read(ref calls));
+            Assert.Equal(tenantId, consumed!.TenantId);
+            Assert.Equal(shopId, consumed.ShopId);
+            Assert.Equal(messageId, consumed.MessageId);
         }
         finally
         {

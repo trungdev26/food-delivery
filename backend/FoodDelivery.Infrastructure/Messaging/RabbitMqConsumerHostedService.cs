@@ -68,11 +68,12 @@ public sealed class RabbitMqConsumerHostedService : BackgroundService
         BasicDeliverEventArgs delivery,
         CancellationToken cancellationToken)
     {
-        if (!TryReadScope(delivery, out var messageId, out var tenantId, out var shopId))
+        if (!TryReadMessage(delivery, out var message))
         {
             await PublishDeadAndAckAsync(channel, registration, delivery, "invalid-message-metadata", cancellationToken);
             return;
         }
+        var messageId = message.MessageId;
 
         try
         {
@@ -82,7 +83,7 @@ public sealed class RabbitMqConsumerHostedService : BackgroundService
                 .GetRequiredService<IUnitOfWorkFactory>().CreateAsync(cancellationToken);
             _logger.LogDebug("Consumer {ConsumerName} opened unit of work for {MessageId}", registration.ConsumerName, messageId);
             if (!await unitOfWork.TryBeginInboxMessageAsync(
-                    registration.ConsumerName, tenantId, shopId, messageId, cancellationToken))
+                    registration.ConsumerName, message.TenantId, message.ShopId, messageId, cancellationToken))
             {
                 await unitOfWork.RollbackAsync(cancellationToken);
                 MessagingMetrics.Duplicates.Add(1, new KeyValuePair<string, object?>("consumer", registration.ConsumerName));
@@ -91,7 +92,7 @@ public sealed class RabbitMqConsumerHostedService : BackgroundService
             }
 
             _logger.LogDebug("Consumer {ConsumerName} acquired inbox message {MessageId}", registration.ConsumerName, messageId);
-            await registration.HandleAsync(delivery.Body, unitOfWork, cancellationToken);
+            await registration.HandleAsync(message, unitOfWork, cancellationToken);
             await unitOfWork.CommitAsync(cancellationToken);
             MessagingMetrics.Consumed.Add(1, new KeyValuePair<string, object?>("consumer", registration.ConsumerName));
             await channel.BasicAckAsync(delivery.DeliveryTag, false, cancellationToken);
@@ -168,9 +169,6 @@ public sealed class RabbitMqConsumerHostedService : BackgroundService
             ? new Dictionary<string, object?>()
             : new Dictionary<string, object?>(delivery.BasicProperties.Headers);
         headers["x-failure-reason"] = reason;
-        MessagingMetrics.DeadLettered.Add(1,
-            new KeyValuePair<string, object?>("consumer", registration.ConsumerName),
-            new KeyValuePair<string, object?>("reason", reason));
         await channel.BasicPublishAsync(
             $"{_options.ExchangeName}.dead",
             registration.QueueName,
@@ -185,16 +183,34 @@ public sealed class RabbitMqConsumerHostedService : BackgroundService
                 Timestamp = delivery.BasicProperties.Timestamp,
                 Headers = headers
             }, delivery.Body, cancellationToken);
+        MessagingMetrics.DeadLettered.Add(1,
+            new KeyValuePair<string, object?>("consumer", registration.ConsumerName),
+            new KeyValuePair<string, object?>("reason", reason));
         await channel.BasicAckAsync(delivery.DeliveryTag, false, cancellationToken);
     }
 
-    private static bool TryReadScope(
-        BasicDeliverEventArgs delivery, out Guid messageId, out Guid tenantId, out Guid shopId)
+    private static bool TryReadMessage(
+        BasicDeliverEventArgs delivery, out ConsumedIntegrationMessage message)
     {
-        messageId = tenantId = shopId = Guid.Empty;
-        return Guid.TryParse(delivery.BasicProperties.MessageId, out messageId) &&
-               Guid.TryParse(HeaderText(delivery.BasicProperties.Headers, "x-tenant-id"), out tenantId) &&
-               Guid.TryParse(HeaderText(delivery.BasicProperties.Headers, "x-shop-id"), out shopId);
+        message = null!;
+        if (!Guid.TryParse(delivery.BasicProperties.MessageId, out var messageId) ||
+            string.IsNullOrWhiteSpace(delivery.BasicProperties.Type) ||
+            !int.TryParse(HeaderText(delivery.BasicProperties.Headers, "x-event-version"), out var version) ||
+            version < 1 ||
+            !Guid.TryParse(HeaderText(delivery.BasicProperties.Headers, "x-tenant-id"), out var tenantId) ||
+            !Guid.TryParse(HeaderText(delivery.BasicProperties.Headers, "x-shop-id"), out var shopId))
+            return false;
+
+        message = new ConsumedIntegrationMessage(
+            messageId,
+            delivery.BasicProperties.Type,
+            version,
+            DateTimeOffset.FromUnixTimeSeconds(delivery.BasicProperties.Timestamp.UnixTime),
+            delivery.BasicProperties.CorrelationId,
+            tenantId,
+            shopId,
+            delivery.Body);
+        return true;
     }
 
     private static long RejectedDeaths(IDictionary<string, object?>? headers)
