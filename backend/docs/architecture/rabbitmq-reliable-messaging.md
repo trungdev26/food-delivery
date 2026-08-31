@@ -509,6 +509,8 @@ Trong multi-tenant system, unique key không thể chỉ là `MessageId`. Scope 
 
 Header tenant hỗ trợ truyền context và tracing, không thay authorization. Consumer vẫn phải kiểm tra tenant/shop scope trong EF query, Dapper predicate, cache key và database constraint.
 
+Production handler nhận `ConsumedIntegrationMessage` cùng `IUnitOfWork`. Transport context cung cấp `TenantId` và `ShopId` đã được validation từ header; payload vẫn phải được deserialize và validate theo contract version trước khi thay đổi business state.
+
 Side effect ngoài MySQL cần idempotency tại provider boundary. Inbox không thể rollback email hoặc payment request đã rời process.
 
 Nếu provider hỗ trợ idempotency key, consumer dùng logical `MessageId` hoặc business operation key. Nếu không, hệ thống cần state machine và reconciliation.

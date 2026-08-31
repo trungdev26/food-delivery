@@ -110,6 +110,8 @@ ACK trước commit có thể làm mất business effect. Commit trước ACK c�
 
 `RabbitMqConsumerHostedService` tạo main/retry/dead topology cho từng `RabbitMqConsumerRegistration`, đặt prefetch và dùng manual ACK. Inbox key có scope `consumerName + tenantId + shopId + messageId`. Duplicate rollback UOW rồi ACK; transient failure đi qua retry queue có TTL; permanent failure hoặc hết số lần retry được confirmed publish sang DLQ trước khi ACK message gốc.
 
+Handler nhận `ConsumedIntegrationMessage` cùng `IUnitOfWork`. Context này mang `MessageId`, contract metadata, `TenantId`, `ShopId` và payload đã đi qua trust-boundary validation; handler không phải đọc lại tenant/shop từ ambient HTTP context hoặc tự tin vào một field trùng tên trong JSON.
+
 ## 6. Messaging Diagnostics trong Development
 
 `GET /dev/messaging` hiển thị trạng thái Outbox gần nhất và số message trong queue chẩn đoán. `POST /dev/messaging/publish` ghi một `DiagnosticPing` vào Outbox bằng UOW thật. Trang chỉ được map trong Development và cho phép kiểm tra toàn bộ luồng MySQL → dispatcher → RabbitMQ mà không phụ thuộc frontend.
